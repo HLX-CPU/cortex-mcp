@@ -1,0 +1,8 @@
+data/
+notes/
+backups/
+reports/
+__pycache__/
+*.pyc
+*.bak-cortex-mcp
+cortex.config.json

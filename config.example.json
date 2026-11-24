@@ -1,0 +1,13 @@
+{
+  "language": "zh",
+  "server_name": "memory-cortex",
+  "tz_offset_hours": 8,
+  "topics": {
+    "示例主题": ["关键词1", "关键词2", "example"]
+  },
+  "profile_files": ["knowledge/profile.md", "knowledge/handoff.md"],
+  "notes_dir": "notes",
+  "sync_command": null,
+  "sync_timeout_sec": 1800,
+  "dashboard_port": 18772
+}

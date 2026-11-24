@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cortex-mcp · 本地记忆皮层</title>
+<style>
+:root{--bg:#101418;--card:#1a2027;--line:#2a323c;--fg:#e8ecef;--dim:#8b98a5;--accent:#5aa9e6}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.6 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+h1{font-size:19px;margin:0}
+h1 small{color:var(--dim);font-weight:400;margin-left:10px}
+main{max-width:1080px;margin:0 auto;padding:20px 24px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card h2{font-size:15px;margin:0 0 10px;color:var(--accent)}
+#stats{display:flex;flex-wrap:wrap;gap:10px}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 14px;min-width:110px}
+.stat b{display:block;font-size:22px}
+.stat span{color:var(--dim);font-size:12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap}
+input[type=text]{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:9px 12px;font-size:15px}
+button{background:var(--accent);border:0;border-radius:8px;color:#08121b;padding:9px 16px;font-size:14px;cursor:pointer}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
+button:disabled{opacity:.5;cursor:default}
+.result{border-top:1px solid var(--line);padding:12px 2px}
+.result:first-of-type{border-top:0}
+.result .meta{color:var(--dim);font-size:12.5px;word-break:break-all}
+.result .title{font-weight:600;margin:2px 0}
+.result .excerpt{color:#c6cfd7;font-size:14px;white-space:pre-wrap;word-break:break-word}
+.notice{color:var(--dim);font-size:12.5px;margin-top:12px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:340px;font-size:13px;white-space:pre-wrap;word-break:break-word}
+#job{color:var(--dim);font-size:13px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 cortex-mcp <small>本地记忆皮层 · local memory cortex</small></h1>
+  <div class="bar">
+    <button class="ghost" id="btn-profile">个人档案 profile</button>
+    <button class="ghost" id="btn-sessions">历史会话 sessions</button>
+    <button class="ghost" id="btn-sync">增量同步 sync</button>
+    <button class="ghost" id="btn-backup">离线备份 backup</button>
+  </div>
+</header>
+<main>
+  <section class="card"><div id="stats">加载中…</div><div class="notice" id="boundaries"></div></section>
+  <section class="card">
+    <div class="bar">
+      <input type="text" id="q" placeholder="检索记忆：项目、决定、偏好、经验…（回车搜索）">
+      <button id="btn-search">搜索</button>
+    </div>
+    <div id="results" style="margin-top:10px"></div>
+  </section>
+  <section class="card" id="detail-card" style="display:none">
+    <h2 id="detail-title"></h2>
+    <div class="meta" id="detail-meta"></div>
+    <pre id="detail-body"></pre>
+    <div class="bar" style="margin-top:8px"><button class="ghost" id="btn-prev">上一段</button><button class="ghost" id="btn-next">下一段</button><button class="ghost" id="btn-close">关闭</button></div>
+  </section>
+  <section class="card"><h2>输出</h2><pre id="job">（点上面的按钮：profile / sessions / sync / backup）</pre></section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(path,body){
+  const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}:undefined);
+  return r.json();
+}
+async function loadStatus(){
+  const s=await api('/api/status');
+  $('stats').innerHTML=['records','sources','preserved_versions','media'].map(k=>
+    `<div class="stat"><b>${esc(s[k])}</b><span>${esc(k)}</span></div>`).join('')+
+    `<div class="stat"><b>${esc((s.topics||[]).length)}</b><span>topics</span></div>`;
+  $('boundaries').textContent=(s.boundaries||[]).join(' ｜ ')+(s.last_sync?` ｜ last sync: ${s.last_sync.started_at}`:'');
+}
+async function doSearch(){
+  const q=$('q').value.trim(); if(!q)return;
+  const rows=await api('/api/search?q='+encodeURIComponent(q));
+  $('results').innerHTML=rows.length?rows.map(r=>
+    `<div class="result"><div class="title"><a href="#" data-id="${esc(r.id)}">${esc(r.title)}</a></div>`+
+    `<div class="meta">${esc(r.observed_at)} · ${esc(r.topic)} · ${esc(r.kind)} · ${esc(r.authority)} · ${esc(r.source_path||'')}</div>`+
+    `<div class="excerpt">${esc(r.excerpt)}</div></div>`).join('')
+    :'<div class="meta">没有匹配结果。</div>';
+  $('results').querySelectorAll('a').forEach(a=>a.onclick=e=>{e.preventDefault();openRecord(a.dataset.id,0)});
+}
+let current={id:null,offset:0};
+async function openRecord(id,offset){
+  const r=await api(`/api/read?id=${encodeURIComponent(id)}&offset=${offset}`);
+  current={id,offset:r.offset};
+  $('detail-card').style.display='';
+  $('detail-title').textContent=r.title;
+  $('detail-meta').textContent=`${r.observed_at} · ${r.topic} · ${r.kind} · ${r.authority} · ${r.source_path||''} · ${r.offset}/${r.total_chars}`;
+  $('detail-body').textContent=r.body;
+  $('btn-next').disabled=!r.next_offset; $('btn-prev').disabled=r.offset===0;
+}
+$('btn-search').onclick=doSearch;
+$('q').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
+$('btn-prev').onclick=()=>openRecord(current.id,Math.max(0,current.offset-12000));
+$('btn-next').onclick=()=>openRecord(current.id,current.offset+12000);
+$('btn-close').onclick=()=>$('detail-card').style.display='none';
+async function job(path,label){
+  $('job').textContent=label+' 已提交…';
+  const started=await api(path,true);
+  const timer=setInterval(async()=>{
+    const j=await api('/api/job');
+    if(!j.running){clearInterval(timer);$('job').textContent=JSON.stringify(j.result||j.error,null,2)}
+  },1500);
+}
+$('btn-profile').onclick=async()=>{$('job').textContent=JSON.stringify(await api('/api/profile'),null,2)};
+$('btn-sessions').onclick=async()=>{$('job').textContent=JSON.stringify(await api('/api/sessions'),null,2)};
+$('btn-sync').onclick=()=>job('/api/sync','增量同步');
+$('btn-backup').onclick=()=>job('/api/backup','离线备份');
+loadStatus();
+</script>
+</body>
+</html>
