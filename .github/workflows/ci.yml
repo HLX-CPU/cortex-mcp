@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: verify (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Show version
+        run: python --version
+      - name: MCP protocol selftest
+        run: python -X utf8 verify.py
+      - name: CLI smoke
+        run: |
+          python -X utf8 cortex_mcp.py --help
+          python -X utf8 cortex_mcp.py selftest
