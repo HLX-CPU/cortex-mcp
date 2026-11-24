@@ -1,5 +1,7 @@
 # cortex-mcp · 记忆皮层
 
+[![CI](https://github.com/HLX-CPU/cortex-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/HLX-CPU/cortex-mcp/actions/workflows/ci.yml)
+
 **一个完全存储于电脑本地、账户无关的"大脑皮层"MCP 服务器。** 把你的历史对话、项目经验、个人偏好做成一个本地知识库，任何支持 MCP 的 AI 客户端（Codex、Claude Code、Claude Desktop、ZCode、Kimi、Cursor……）都能读写同一份记忆。
 
 **A local-first, account-independent "memory cortex" MCP server.** One home directory, one SQLite index, any MCP client. Nothing leaves your computer.
@@ -48,6 +50,7 @@ python dashboard.py
 | Claude Desktop | `claude_desktop_config.json` | JSON `mcpServers` |
 | ZCode | `~/.zcode/cli/config.json` | JSON `mcp.servers`（严格 schema） |
 | Kimi Code CLI | `~/.kimi-code/mcp.json`（含 `KIMI_CODE_HOME`） | JSON `mcpServers` |
+| DeepSeek Harness | 桌面 profile 的 `cordis.patch.yml` | 手动加 `insert` 条目（`@deepseek-ai/dsh-mcp-client`，stdio） |
 | 任意其他 | 自定 | `--client generic-json --path <file> --key mcpServers` |
 
 ```bash
@@ -61,6 +64,20 @@ python connect.py --client zcode --remove                  # 卸载（只删自�
 
 ```json
 { "command": "python", "args": ["-X", "utf8", "cortex_mcp.py", "--home", "D:/cortex-home", "mcp"] }
+```
+
+DeepSeek Harness 走它自己的插件配置（profile 根目录的 `cordis.patch.yml`，追加后重启或热加载即可）：
+
+```yaml
+- insert:
+    - id: mcp-memory-cortex
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory_cortex
+        transport: stdio
+        command: python
+        args: ["-X", "utf8", "cortex_mcp.py", "--home", "D:/cortex-home", "mcp"]
+        toolCallTimeoutMs: 300000
 ```
 
 ## MCP 工具 / Tools
